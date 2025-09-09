@@ -1,0 +1,18 @@
+[theme]
+# Primary color for buttons, links, and accents
+primaryColor = "#26A69A"  # Teal green - energetic but professional
+
+# Background color for the main content area
+backgroundColor = "#F5F7F9"  # Off-white with slight blue tint for readability
+
+# Background color for the sidebar
+secondaryBackgroundColor = "#E0F2F1"  # Light teal for sidebar
+
+# Text color
+textColor = "#004D40"  # Dark teal for good contrast and readability
+
+# Font family
+font = "sans serif"  # Clean, modern look
+
+# Additional customizations
+base = "light"  # Light mode base
