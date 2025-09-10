@@ -58,7 +58,7 @@ EnergySense/
 - Python 3.11 or higher
 - pip package manager
 
-### Setup Instructions
+### Local Setup Instructions
 
 1. **Clone the repository**
    ```bash
@@ -91,6 +91,38 @@ EnergySense/
    ```bash
    streamlit run app.py
    ```
+
+### 🚀 Deployment (Heroku)
+
+1. **Create a Heroku app**
+   ```bash
+   heroku create your-energysense-app
+   ```
+
+2. **Use deployment-optimized requirements**
+   ```bash
+   cp requirements-deploy.txt requirements.txt
+   ```
+
+3. **Deploy to Heroku**
+   ```bash
+   git add .
+   git commit -m "Deploy EnergySense"
+   git push heroku main
+   ```
+
+4. **Open the app**
+   ```bash
+   heroku open
+   ```
+
+### 🌐 Alternative Deployment (Streamlit Cloud)
+
+1. **Fork this repository**
+2. **Go to [share.streamlit.io](https://share.streamlit.io)**
+3. **Connect your GitHub account**
+4. **Select your forked repository**
+5. **Deploy!**
 
 ## 🎯 Usage
 
