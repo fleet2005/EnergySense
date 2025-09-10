@@ -99,9 +99,9 @@ EnergySense/
    heroku create your-energysense-app
    ```
 
-2. **Use deployment-optimized requirements**
+2. **Use minimal requirements for better compatibility**
    ```bash
-   cp requirements-deploy.txt requirements.txt
+   cp requirements-minimal.txt requirements.txt
    ```
 
 3. **Deploy to Heroku**
@@ -115,6 +115,8 @@ EnergySense/
    ```bash
    heroku open
    ```
+
+**Note**: If you encounter Python 3.13 compatibility issues, the runtime.txt is set to Python 3.12.7 for better stability.
 
 ### 🌐 Alternative Deployment (Streamlit Cloud)
 
@@ -244,6 +246,21 @@ districts = {
 4. **API Connection Issues**
    - Check internet connection
    - Models will use synthetic data as fallback
+
+5. **Python 3.13 Compatibility Issues**
+   ```bash
+   # Use Python 3.12 instead
+   echo "python-3.12.7" > runtime.txt
+   cp requirements-minimal.txt requirements.txt
+   ```
+
+6. **Deployment Build Failures**
+   ```bash
+   # Try with minimal requirements
+   cp requirements-minimal.txt requirements.txt
+   # Or use specific versions
+   pip install --upgrade pip setuptools wheel
+   ```
 
 ## 🤝 Contributing
 
