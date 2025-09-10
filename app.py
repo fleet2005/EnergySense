@@ -288,6 +288,32 @@ st.markdown("""
         border-radius: 0.5rem;
         margin-bottom: 1rem;
     }
+    
+    /* Fix navigation button issues */
+    .stRadio > div > label > div[data-testid="stMarkdownContainer"] {
+        padding: 0.5rem;
+        margin: 0.25rem 0;
+    }
+    
+    .stRadio > div > label {
+        cursor: pointer !important;
+        transition: none !important;
+    }
+    
+    .stRadio > div > label:hover {
+        background-color: #f0f0f0;
+        border-radius: 0.25rem;
+    }
+    
+    /* Ensure stable button behavior */
+    .stRadio > div {
+        margin-bottom: 0.5rem;
+    }
+    
+    /* Prevent button overlap issues */
+    .stSidebar .stRadio {
+        margin-bottom: 1rem;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -304,10 +330,21 @@ energy_data = pd.DataFrame({
 
 # Navigation
 st.sidebar.markdown("# EnergySense")
-page = st.sidebar.selectbox(
+st.sidebar.markdown("---")
+
+# Create a more stable navigation system
+st.sidebar.markdown("### 🏠 Navigation")
+page = st.sidebar.radio(
     "Select a service:",
-    ["Home", "Renewable Energy Forecaster", "Grid Energy Allocation", "Turbine Thermal Defect Detection", "Power Map"]
+    ["Home", "Renewable Energy Forecaster", "Grid Energy Allocation", "Turbine Thermal Defect Detection", "Power Map"],
+    index=0,
+    key="main_navigation"
 )
+
+# Add a visual indicator of current page
+st.sidebar.markdown("---")
+st.sidebar.markdown(f"**Current Page:** {page}")
+st.sidebar.markdown("---")
 
 # Home Page
 if page == "Home":

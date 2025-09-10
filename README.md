@@ -124,13 +124,26 @@ EnergySense/
 
 **Note**: The Aptfile provides system dependencies needed for OpenCV. If you encounter issues, try the minimal requirements instead.
 
-### 🌐 Alternative Deployment (Streamlit Cloud)
+### 🌐 Streamlit Cloud Deployment (Recommended)
 
-1. **Fork this repository**
+1. **Fork this repository** on GitHub
 2. **Go to [share.streamlit.io](https://share.streamlit.io)**
 3. **Connect your GitHub account**
-4. **Select your forked repository**
-5. **Deploy!**
+4. **Click "New app"**
+5. **Configure your app:**
+   - **Repository**: Select your forked repository
+   - **Branch**: `main` or `master`
+   - **Main file path**: `app.py`
+   - **App URL**: Choose a custom URL (optional)
+6. **Click "Deploy!"**
+
+**Streamlit Cloud Configuration:**
+- Uses `requirements.txt` automatically
+- No need for Procfile or runtime.txt
+- Automatic HTTPS and custom domains
+- Free hosting with good performance
+
+**Note**: Streamlit Cloud works best with the standard `requirements.txt` file. The headless OpenCV version should work perfectly on Streamlit Cloud.
 
 ## 🎯 Usage
 
