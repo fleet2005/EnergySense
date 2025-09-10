@@ -99,24 +99,30 @@ EnergySense/
    heroku create your-energysense-app
    ```
 
-2. **Use minimal requirements for better compatibility**
+2. **Add buildpack for system dependencies (for OpenCV)**
    ```bash
-   cp requirements-minimal.txt requirements.txt
+   heroku buildpacks:add --index 1 https://github.com/heroku/heroku-buildpack-apt
+   heroku buildpacks:add --index 2 heroku/python
    ```
 
-3. **Deploy to Heroku**
+3. **Use OpenCV-optimized requirements**
+   ```bash
+   cp requirements-opencv-fix.txt requirements.txt
+   ```
+
+4. **Deploy to Heroku**
    ```bash
    git add .
-   git commit -m "Deploy EnergySense"
+   git commit -m "Deploy EnergySense with OpenCV support"
    git push heroku main
    ```
 
-4. **Open the app**
+5. **Open the app**
    ```bash
    heroku open
    ```
 
-**Note**: If you encounter Python 3.13 compatibility issues, the runtime.txt is set to Python 3.12.7 for better stability.
+**Note**: The Aptfile provides system dependencies needed for OpenCV. If you encounter issues, try the minimal requirements instead.
 
 ### 🌐 Alternative Deployment (Streamlit Cloud)
 
@@ -260,6 +266,16 @@ districts = {
    cp requirements-minimal.txt requirements.txt
    # Or use specific versions
    pip install --upgrade pip setuptools wheel
+   ```
+
+7. **OpenCV Installation Issues**
+   ```bash
+   # Try headless version (no GUI dependencies)
+   pip install opencv-python-headless
+   # Or use alternative requirements
+   cp requirements-opencv-fix.txt requirements.txt
+   # For Heroku, add buildpack for better OpenCV support
+   heroku buildpacks:add --index 1 https://github.com/heroku/heroku-buildpack-apt
    ```
 
 ## 🤝 Contributing

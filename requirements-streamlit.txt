@@ -1,4 +1,4 @@
-# Core dependencies for EnergySense - Python 3.13 compatible
+# Optimized requirements for Streamlit Cloud deployment
 streamlit>=1.28.0
 pandas>=2.0.0
 numpy>=1.26.0
@@ -14,6 +14,3 @@ pulp>=2.7.0
 openmeteo-requests>=1.3.0
 requests-cache>=1.2.0
 retry-requests>=2.0.0
-setuptools>=65.0.0
-wheel>=0.40.0
-cmake>=3.25.0
