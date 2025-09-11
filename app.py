@@ -12,7 +12,6 @@ from PIL import Image
 import requests
 import json
 import warnings
-import pulp
 import folium
 from streamlit_folium import folium_static 
 # Suppress warnings
@@ -417,8 +416,8 @@ elif page == "Grid Energy Allocation":
     # List of cities in Tamil Nadu
     cities = ["Chennai", "Coimbatore", "Madurai", "Salem", "Thoothukudi", "Dindigul", "Nagapattinam", "Ramanathapuram"]
 
-    # Updated city demand data (in kWh)
-    city_demand = {
+    # Base city demand data (in kWh) - will be modified by time of day
+    base_city_demand = {
         "Chennai": {"residential": 1100, "commercial": 825, "industrial": 825},
         "Coimbatore": {"residential": 600, "commercial": 450, "industrial": 450},
         "Madurai": {"residential": 400, "commercial": 300, "industrial": 300},
@@ -428,6 +427,15 @@ elif page == "Grid Energy Allocation":
         "Nagapattinam": {"residential": 200, "commercial": 150, "industrial": 150},
         "Ramanathapuram": {"residential": 180, "commercial": 135, "industrial": 135},
     }
+    
+    # Use static base demand without time-based variation for simplicity
+    city_demand = {}
+    for city, base_demand in base_city_demand.items():
+        city_demand[city] = {
+            "residential": int(base_demand["residential"]),
+            "commercial": int(base_demand["commercial"]),
+            "industrial": int(base_demand["industrial"])
+        }
 
     # Transmission losses (as a percentage of energy sent to each city)
     transmission_losses = {
@@ -477,134 +485,189 @@ elif page == "Grid Energy Allocation":
         "Ramanathapuram": {"lat": 9.3716, "lon": 78.8307},
     }
 
-    # User input for grid parameters
+    # User input for grid parameters (simplified)
     st.sidebar.header("Grid Parameters Input")
-
-    # Input fields for grid parameters
-    total_solar_gen = st.sidebar.number_input("Total Solar Generation (kWh)", min_value=0, value=5000)
-    total_wind_gen = st.sidebar.number_input("Total Wind Generation (kWh)", min_value=0, value=3000)
-    total_battery_level = st.sidebar.number_input("Total Battery Level (%)", min_value=0, max_value=100, value=80)
-    energy_storage_capacity = st.sidebar.number_input("Energy Storage Capacity (kWh)", min_value=0, value=2000)
-    grid_frequency = st.sidebar.number_input("Grid Frequency (Hz)", min_value=49.0, max_value=51.0, value=50.0)
-
-    # Calculate total energy available
-    total_energy_available = total_solar_gen + total_wind_gen + (total_battery_level * 0.1)  # Assume 10% of battery is used
+    total_energy_available = st.sidebar.number_input("Total Available Energy (kWh)", min_value=0, value=8000)
 
     # Display total energy available
     st.sidebar.write(f"Total Energy Available: {total_energy_available:.2f} kWh")
+    
+    # Display current demand overview
+    st.subheader("📊 Current Demand Overview")
+    col1, col2, col3 = st.columns(3)
+    
+    total_residential = sum(city_demand[city]["residential"] for city in cities)
+    total_commercial = sum(city_demand[city]["commercial"] for city in cities)
+    total_industrial = sum(city_demand[city]["industrial"] for city in cities)
+    total_demand = total_residential + total_commercial + total_industrial
+    
+    with col1:
+        st.metric("Residential Demand", f"{total_residential:,} kWh")
+    with col2:
+        st.metric("Commercial Demand", f"{total_commercial:,} kWh")
+    with col3:
+        st.metric("Industrial Demand", f"{total_industrial:,} kWh")
+    
+    st.metric("Total Grid Demand", f"{total_demand:,} kWh", 
+              f"Supply: {total_energy_available/total_demand*100:.1f}%" if total_demand > 0 else "N/A")
+    
+    # Show demand by city
+    st.subheader("🏙️ Demand by City")
+    demand_df = pd.DataFrame([
+        {
+            "City": city,
+            "Residential (kWh)": city_demand[city]["residential"],
+            "Commercial (kWh)": city_demand[city]["commercial"],
+            "Industrial (kWh)": city_demand[city]["industrial"],
+            "Total (kWh)": sum(city_demand[city].values())
+        }
+        for city in cities
+    ])
+    st.dataframe(demand_df, use_container_width=True)
 
-    # Button to run allocation
-    if st.sidebar.button("Allocate Energy to Cities"):
-        # Define the optimization problem
-        prob = pulp.LpProblem("Energy_Allocation", pulp.LpMinimize)
+    # Validation checks
+    if total_energy_available <= 0:
+        st.error("❌ Total energy available must be greater than 0")
+        st.stop()
 
-        # Decision variables: Energy allocated to each city
-        allocation = pulp.LpVariable.dicts("Allocation", cities, lowBound=0)
+    # Button to run simplified allocation (greedy transportation)
+    if st.sidebar.button("🚀 Allocate Energy to Cities"):
+        remaining_supply = float(total_energy_available)
+        per_city_demand_remaining = {
+            city: float(sum(city_demand[city].values())) for city in cities
+        }
+        allocated_sent_per_city = {city: 0.0 for city in cities}
 
-        # Slack variables for unmet demand
-        unmet_demand = pulp.LpVariable.dicts("Unmet_Demand", cities, lowBound=0)
-
-        # Battery charge/discharge variables
-        battery_charge = pulp.LpVariable("Battery_Charge", lowBound=0, upBound=energy_storage_capacity)
-        battery_discharge = pulp.LpVariable("Battery_Discharge", lowBound=0, upBound=energy_storage_capacity)
-
-        # Objective function: Minimize total cost (transmission losses + distribution costs + grid instability penalties)
-        prob += (
-            pulp.lpSum(allocation[city] * transmission_losses[city] for city in cities)  # Transmission losses
-            + pulp.lpSum(allocation[city] * distribution_costs[city] for city in cities)  # Distribution costs
-            + pulp.lpSum(unmet_demand[city] * 1000 for city in cities)  # Penalty for unmet demand (high cost)
-        ), "Total_Cost"
-
-        # Constraints
-        # 1. Total energy allocated cannot exceed total energy available
-        prob += pulp.lpSum(allocation[city] for city in cities) + battery_charge <= total_energy_available, "Total_Energy_Constraint"
-
-        # 2. Meet demand for each city (considering transmission losses and unmet demand)
-        for city in cities:
-            total_demand = (
-                city_demand[city]["residential"]
-                + city_demand[city]["commercial"]
-                + city_demand[city]["industrial"]
-            )
-            prob += (
-                allocation[city] * (1 - transmission_losses[city]) + unmet_demand[city] >= total_demand
-            ), f"Demand_Constraint_{city}"
-
-        # 3. Transmission line capacity constraints
-        for city in cities:
-            prob += allocation[city] <= transmission_capacity[city], f"Transmission_Capacity_{city}"
-
-        # 4. Battery constraints
-        prob += battery_charge <= energy_storage_capacity, "Battery_Charge_Limit"
-        prob += battery_discharge <= energy_storage_capacity, "Battery_Discharge_Limit"
-
-        # 5. Grid frequency stability constraints
-        total_demand = sum(
-            city_demand[city]["residential"] + city_demand[city]["commercial"] + city_demand[city]["industrial"]
+        # Effective cost per received kWh: distribution cost + loss penalty
+        city_costs = {
+            city: distribution_costs[city] + transmission_losses[city]
             for city in cities
+        }
+
+        # 1) Fairness seed pass: give each city an equal share of a small seed pool
+        cities_needing = [c for c in cities if per_city_demand_remaining[c] > 0 and transmission_capacity[c] > 0]
+        if remaining_supply > 0 and len(cities_needing) > 0:
+            seed_fraction = 0.4  # allocate at most 40% of total supply in the seed
+            seed_pool = min(remaining_supply, seed_fraction * float(total_energy_available))
+            per_city_quota = seed_pool / len(cities_needing)
+            for city in cities_needing:
+                if remaining_supply <= 0:
+                    break
+                loss = transmission_losses[city]
+                demand_needed = per_city_demand_remaining[city]
+                if demand_needed <= 0:
+                    continue
+                send_needed = demand_needed / max(1e-9, (1 - loss))
+                cap_left = max(0.0, transmission_capacity[city] - allocated_sent_per_city[city])
+                to_send = min(per_city_quota, send_needed, cap_left, remaining_supply)
+                if to_send > 0:
+                    received = to_send * (1 - loss)
+                    per_city_demand_remaining[city] = max(0.0, demand_needed - received)
+                    allocated_sent_per_city[city] += to_send
+                    remaining_supply -= to_send
+
+        # 2) Strict-priority greedy: keep filling the cheapest city to completion
+        sorted_cities = sorted(cities, key=lambda c: city_costs[c])
+
+        while remaining_supply > 0:
+            made_progress = False
+            for city in sorted_cities:
+                if remaining_supply <= 0:
+                    break
+                loss = transmission_losses[city]
+                demand_needed = per_city_demand_remaining[city]
+                if demand_needed <= 0:
+                    continue
+                send_needed = demand_needed / max(1e-9, (1 - loss))
+                cap_left = max(0.0, transmission_capacity[city] - allocated_sent_per_city[city])
+                to_send = min(send_needed, cap_left, remaining_supply)
+                if to_send > 0:
+                    received = to_send * (1 - loss)
+                    per_city_demand_remaining[city] = max(0.0, demand_needed - received)
+                    allocated_sent_per_city[city] += to_send
+                    remaining_supply -= to_send
+                    made_progress = True
+            if not made_progress:
+                break
+
+        # Build results
+        results = []
+        for city in cities:
+            allocated = float(allocated_sent_per_city[city])
+            received = allocated * (1 - transmission_losses[city])
+            unmet = max(0.0, float(sum(city_demand[city].values())) - received)
+            results.append({
+                "City": city,
+                "Residential_Demand (kWh)": city_demand[city]["residential"],
+                "Commercial_Demand (kWh)": city_demand[city]["commercial"],
+                "Industrial_Demand (kWh)": city_demand[city]["industrial"],
+                "Total_Demand (kWh)": float(sum(city_demand[city].values())),
+                "Allocated_Energy (kWh)": float(allocated),
+                "Transmission_Loss (kWh)": float(allocated * transmission_losses[city]),
+                "Received_Energy (kWh)": float(received),
+                "Unmet_Demand (kWh)": float(unmet),
+                "Effective_Cost": float(city_costs[city])
+            })
+
+        allocation_df = pd.DataFrame(results)
+
+        st.subheader("⚡ Energy Allocation Results (Greedy Transportation)")
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            st.metric("Total Allocated", f"{allocation_df['Allocated_Energy (kWh)'].sum():.0f} kWh")
+        with col2:
+            st.metric("Total Losses", f"{allocation_df['Transmission_Loss (kWh)'].sum():.0f} kWh")
+        with col3:
+            st.metric("Total Received", f"{allocation_df['Received_Energy (kWh)'].sum():.0f} kWh")
+        with col4:
+            st.metric("Unmet Demand", f"{allocation_df['Unmet_Demand (kWh)'].sum():.0f} kWh")
+
+        st.dataframe(allocation_df.drop(columns=["Effective_Cost"]), use_container_width=True)
+
+        # Allocation efficiency chart
+        st.subheader("📈 Allocation Efficiency")
+        fig = go.Figure()
+        fig.add_trace(go.Bar(
+            name='Demand',
+            x=allocation_df['City'],
+            y=allocation_df['Total_Demand (kWh)'],
+            marker_color='lightblue'
+        ))
+        fig.add_trace(go.Bar(
+            name='Received Energy',
+            x=allocation_df['City'],
+            y=allocation_df['Received_Energy (kWh)'],
+            marker_color='green'
+        ))
+        fig.add_trace(go.Bar(
+            name='Unmet Demand',
+            x=allocation_df['City'],
+            y=allocation_df['Unmet_Demand (kWh)'],
+            marker_color='red'
+        ))
+        fig.update_layout(
+            title='Energy Demand vs Allocation by City',
+            xaxis_title='City',
+            yaxis_title='Energy (kWh)',
+            barmode='group'
         )
-        total_supply = total_solar_gen + total_wind_gen + battery_discharge - battery_charge
-        frequency_deviation = (total_supply - total_demand) / total_demand  # Proportional deviation
-        prob += frequency_deviation >= -0.01, "Frequency_Lower_Limit"  # Allow 1% drop
-        prob += frequency_deviation <= 0.01, "Frequency_Upper_Limit"  # Allow 1% rise
+        st.plotly_chart(fig, use_container_width=True)
 
-        # Solve the problem
-        prob.solve()
-
-        # Check if the problem was solved successfully
-        if pulp.LpStatus[prob.status] == "Optimal":
-            # Extract results
-            allocation_results = []
-            for city in cities:
-                allocated_energy = allocation[city].varValue
-                total_demand = (
-                    city_demand[city]["residential"]
-                    + city_demand[city]["commercial"]
-                    + city_demand[city]["industrial"]
-                )
-                unmet = unmet_demand[city].varValue
-                allocation_results.append({
-                    "City": city,
-                    "Residential_Demand (kWh)": city_demand[city]["residential"],
-                    "Commercial_Demand (kWh)": city_demand[city]["commercial"],
-                    "Industrial_Demand (kWh)": city_demand[city]["industrial"],
-                    "Total_Demand (kWh)": total_demand,
-                    "Allocated_Energy (kWh)": allocated_energy,
-                    "Transmission_Loss (kWh)": allocated_energy * transmission_losses[city],
-                    "Received_Energy (kWh)": allocated_energy * (1 - transmission_losses[city]),
-                    "Unmet_Demand (kWh)": unmet,
-                })
-
-            # Create a DataFrame for results
-            allocation_df = pd.DataFrame(allocation_results)
-
-            # Display results
-            st.subheader("Energy Allocation Results")
-            st.dataframe(allocation_df)
-
-            # Visualize allocation on a map using folium
-            st.subheader("Energy Allocation Map")
-
-            # Create a folium map centered on Tamil Nadu
-            m = folium.Map(location=[11.0, 78.0], zoom_start=7)
-
-            # Add markers for each city
-            for _, row in allocation_df.iterrows():
-                city = row["City"]
-                lat = geo_data[city]["lat"]
-                lon = geo_data[city]["lon"]
-                allocated_energy = row["Allocated_Energy (kWh)"]
-                tooltip = f"{city}<br>Allocated Energy: {allocated_energy:.2f} kWh"
-                folium.Marker(
-                    location=[lat, lon],
-                    popup=tooltip,
-                    tooltip=tooltip,
-                ).add_to(m)
-
-            # Display the map
-            folium_static(m)
-        else:
-            st.error("Optimization failed! Check input parameters and constraints.")
+        # Visualize allocation on a map using folium
+        st.subheader("Energy Allocation Map")
+        m = folium.Map(location=[11.0, 78.0], zoom_start=7)
+        for _, row in allocation_df.iterrows():
+            city = row["City"]
+            lat = geo_data[city]["lat"]
+            lon = geo_data[city]["lon"]
+            allocated_energy = row["Allocated_Energy (kWh)"]
+            tooltip = f"{city}<br>Allocated Energy: {allocated_energy:.2f} kWh"
+            folium.Marker(
+                location=[lat, lon],
+                popup=tooltip,
+                tooltip=tooltip,
+            ).add_to(m)
+        folium_static(m)
 
 
 
